@@ -1,9 +1,10 @@
 package com.akhaku.kafka;
 
-import java.time.Duration;
 import java.util.Collections;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -39,12 +40,33 @@ public class MainTest {
     public void testConsumer() throws Exception {
         KafkaConsumer<String, String> consumer = KafkaConsumerFactory.create();
         consumer.subscribe(Collections.singleton(TOPIC));
-        while (true) {
-            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
-            for (ConsumerRecord<String, String> record : records) {
-                LOGGER.info("Key: " + record.key() + ", Value: " + record.value());
-                LOGGER.info("Paritition: " + record.partition() + ", Offset: " + record.offset());
+    }
+
+    @Test
+    public void testConsumerThreads() throws Exception {
+        int numConsumers = 4;
+        CountDownLatch latch = new CountDownLatch(numConsumers);
+        List<ConsumerThread> runnables = IntStream.range(0, numConsumers)
+            .mapToObj(i -> new ConsumerThread(latch, TOPIC))
+            .collect(Collectors.toList());
+        IntStream.range(0, numConsumers).forEach(i -> {
+            new Thread(runnables.get(i), "ConsumerThread-" + i).start();
+        });
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("Caught shutdown hook");
+            runnables.forEach(t -> t.close());
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                LOGGER.error("Error", e);
             }
+        }));
+        try {
+            latch.await();
+        } catch (Exception e) {
+            LOGGER.error("Application interrupted", e);
+        } finally {
+            LOGGER.info("Application exiting");
         }
     }
 
