@@ -1,14 +1,18 @@
 package com.akhaku.kafka;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,9 +74,31 @@ public class MainTest {
         }
     }
 
+    @Test
+    public void testAssignAndSeek() throws Exception {
+        KafkaConsumer<String, String> consumer = KafkaConsumerFactory.create();
+        long offsetToReadFrom = 15L;
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        consumer.assign(Collections.singleton(partition));
+        consumer.seek(partition, offsetToReadFrom);
+        int numMessages = 5;
+        while (numMessages > 0) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+            for (ConsumerRecord<String, String> record : records) {
+                LOGGER.info("Key: " + record.key() + ", Value: " + record.value());
+                LOGGER.info("Paritition: " + record.partition() + ", Offset: " + record.offset());
+                numMessages--;
+                if (numMessages == 0) {
+                    break;
+                }
+            }
+        }
+
+    }
+
     private static String toString(RecordMetadata recordMetadata) {
         return new StringBuilder("RecordMetadata{topic=").append(recordMetadata.topic())
-            .append(",parition=").append(recordMetadata.partition())
+            .append(",partition=").append(recordMetadata.partition())
             .append(",offset=").append(recordMetadata.offset())
             .append(",timestamp=").append(recordMetadata.timestamp())
             .append("}").toString();
