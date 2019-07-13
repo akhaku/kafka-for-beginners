@@ -1,5 +1,10 @@
 package com.akhaku.kafka;
 
+import java.time.Duration;
+import java.util.Collections;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -12,10 +17,12 @@ public class MainTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(MainTest.class);
 
     @Test
-    public void testRunProducer() {
+    public void testRunProducer() throws Exception {
         KafkaProducer<String, String> producer = new KafkaProducerFactory().create();
         for (int i = 0; i < 10; i++) {
-            ProducerRecord<String, String> record = new ProducerRecord<>(TOPIC, "hello world " + i);
+            String value = "hello world " + i;
+            String key = "id_" + i;
+            ProducerRecord<String, String> record = new ProducerRecord<>(TOPIC, key, value);
             producer.send(record, (recordMetadata, e) -> {
                 if (e == null) {
                     LOGGER.info("Received new metadata: {}", toString(recordMetadata));
@@ -26,6 +33,19 @@ public class MainTest {
         }
         producer.flush();
         producer.close();
+    }
+
+    @Test
+    public void testConsumer() throws Exception {
+        KafkaConsumer<String, String> consumer = KafkaConsumerFactory.create();
+        consumer.subscribe(Collections.singleton(TOPIC));
+        while (true) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+            for (ConsumerRecord<String, String> record : records) {
+                LOGGER.info("Key: " + record.key() + ", Value: " + record.value());
+                LOGGER.info("Paritition: " + record.partition() + ", Offset: " + record.offset());
+            }
+        }
     }
 
     private static String toString(RecordMetadata recordMetadata) {
